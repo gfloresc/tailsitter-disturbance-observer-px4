@@ -1,0 +1,3 @@
+#!/bin/sh
+# reference generation, disturbance injection and observer logging (IJC_MODE = 1)
+ijc_control start

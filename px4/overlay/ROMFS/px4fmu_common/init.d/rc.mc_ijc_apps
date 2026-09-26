@@ -1,0 +1,19 @@
+#!/bin/sh
+#
+# Multicopter-type vehicle flown by ijc_control (observer-based
+# disturbance-compensated tail-sitter controller).
+#
+# None of the standard PX4 control laws are started (no mc_pos_control,
+# mc_att_control, mc_rate_control, flight_mode_manager): ijc_control computes
+# the collective thrust and body torques directly and feeds the control
+# allocator. EKF2, commander, navigator, land detector and logger are the
+# standard ones.
+#
+# NOTE: Script variables are declared/initialized/unset in the rcS script.
+#
+
+control_allocator start
+
+ijc_control start
+
+land_detector start multicopter

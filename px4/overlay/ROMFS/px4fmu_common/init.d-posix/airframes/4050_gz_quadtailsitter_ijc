@@ -1,0 +1,116 @@
+#!/bin/sh
+#
+# @name Quad tail-sitter (hover) flown by ijc_control
+#
+# @type Quadrotor x
+#
+# @maintainer ijc_control authors
+#
+# Gazebo quadtailsitter model in hover, controlled exclusively by the
+# observer-based disturbance-compensated controller of the IJC paper
+# (module ijc_control). No standard PX4 control law is started
+# (see rc.mc_ijc_apps). The vehicle is flown in Offboard mode
+# (thrust_and_torque) from arming to disarming, takeoff and landing included.
+#
+
+. ${R}etc/init.d/rc.mc_defaults
+
+# only ijc_control, control_allocator and land_detector (rc.mc_ijc_apps)
+set VEHICLE_TYPE mc_ijc
+
+PX4_SIMULATOR=${PX4_SIMULATOR:=gz}
+PX4_GZ_WORLD=${PX4_GZ_WORLD:=ijc_calm}
+PX4_SIM_MODEL=${PX4_SIM_MODEL:=quadtailsitter_ijc}
+# heading north (NED yaw = 0 = IJC_PSI_D) at spawn: ENU yaw of +90 deg
+PX4_GZ_MODEL_POSE=${PX4_GZ_MODEL_POSE:="0,0,0,0,0,1.5707963"}
+
+param set-default SIM_GZ_EN 1
+# magnetometer from PX4 sensor_mag_sim (ground-truth attitude + WMM): the gz-sim 8 magnetometer
+# frame is only handled correctly for a level vehicle, which gave a tilt-dependent EKF yaw error
+param set-default SENS_EN_MAGSIM 1
+
+# Allocation: rotor geometry of 4018_gz_quadtailsitter, plain multirotor effectiveness
+param set-default CA_AIRFRAME 0
+param set-default CA_ROTOR_COUNT 4
+param set-default CA_ROTOR0_PX 0.15
+param set-default CA_ROTOR0_PY 0.23
+param set-default CA_ROTOR0_KM 0.05
+param set-default CA_ROTOR1_PX -0.15
+param set-default CA_ROTOR1_PY -0.23
+param set-default CA_ROTOR1_KM 0.05
+param set-default CA_ROTOR2_PX 0.15
+param set-default CA_ROTOR2_PY -0.23
+param set-default CA_ROTOR2_KM -0.05
+param set-default CA_ROTOR3_PX -0.15
+param set-default CA_ROTOR3_PY 0.23
+param set-default CA_ROTOR3_KM -0.05
+
+# ESC mapping: rotor speed command = SIM_GZ_EC_MAX * sqrt(u) (THR_MDL_FAC = 1),
+# so that the rotor thrust (motorConstant * w^2) is linear in the allocator output u.
+param set-default SIM_GZ_EC_FUNC1 101
+param set-default SIM_GZ_EC_FUNC2 102
+param set-default SIM_GZ_EC_FUNC3 103
+param set-default SIM_GZ_EC_FUNC4 104
+param set-default SIM_GZ_EC_MIN1 0
+param set-default SIM_GZ_EC_MIN2 0
+param set-default SIM_GZ_EC_MIN3 0
+param set-default SIM_GZ_EC_MIN4 0
+param set-default SIM_GZ_EC_MAX1 1200
+param set-default SIM_GZ_EC_MAX2 1200
+param set-default SIM_GZ_EC_MAX3 1200
+param set-default SIM_GZ_EC_MAX4 1200
+param set-default THR_MDL_FAC 1.0
+# idle rotor speed is 0 with this mapping: the ESC arming check (spinning feedback) would
+# trigger a failsafe while the standard controllers spool up (4051)
+param set-default FD_ESCS_EN 0
+
+# ---- ijc_control: vehicle model (scripts/normalization.py on the quadtailsitter SDF)
+param set-default IJC_MASS 1.635
+param set-default IJC_JXX 0.11535
+param set-default IJC_JYY 0.03224
+param set-default IJC_JZZ 0.08568
+param set-default IJC_FMAX 47.8305
+param set-default IJC_TMAX_X 4.8169
+param set-default IJC_TMAX_Y 4.5947
+param set-default IJC_TMAX_Z 5.9662
+# lateral force of the canted rotors per unit normalized torque (known part of the applied force)
+param set-default IJC_FX_TY -5.8057
+param set-default IJC_FY_TX -3.8417
+# rotor speed dynamics (gz motor model: 12.5 ms up / 25 ms down; the upper bound is the robust choice)
+param set-default IJC_TAU_MOT 0.025
+# feedforward in mu of the lateral force of the canted rotors (total applied torque, 0.5 s low-pass)
+param set-default IJC_FLAT_FF 2
+param set-default IJC_FLAT_TC 0.5
+# ijc_control in the loop (4051 sets 1: standard PX4 controllers)
+param set-default IJC_MODE 0
+
+# ---- ijc_control: gains for this vehicle (paper Section 4 structure; reduced attitude
+# and rotational-observer bandwidth because of the rotor dynamics; translational observer
+# slowed down accordingly to keep the time-scale separation, see README)
+param set-default IJC_KP 4.0
+param set-default IJC_KV 4.0
+param set-default IJC_KQ 400.0
+param set-default IJC_KOM 30.0
+param set-default IJC_K1 100.0
+param set-default IJC_L1 2500.0
+# translational observer poles at -10 (paper: -20): slower than the reduced attitude loop
+param set-default IJC_K2 20.0
+param set-default IJC_L2 100.0
+
+# hover thrust m g / IJC_FMAX (only informative: no PX4 controller uses it; land detector)
+param set-default MPC_THR_HOVER 0.335
+
+# fast attitude loop: publish angular velocity at the IMU rate (1 kHz in the ijc world/model)
+param set-default IMU_GYRO_RATEMAX 1000
+
+# no RC / GCS failsafes during the automated experiments
+param set-default COM_RC_IN_MODE 4
+param set-default NAV_DLL_ACT 0
+param set-default NAV_RCL_ACT 0
+
+# log controller-relevant topics at full rate (default + high rate profiles)
+param set-default SDLOG_PROFILE 17
+# one log per flight (arm to disarm)
+param set-default SDLOG_MODE 0
+# log synchronously with ijc_control (every controller sample, 1 kHz)
+set LOGGER_POLL_TOPIC ijc_debug

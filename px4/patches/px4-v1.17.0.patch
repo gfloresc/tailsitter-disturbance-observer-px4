@@ -1,0 +1,250 @@
+diff --git a/ROMFS/px4fmu_common/init.d-posix/airframes/CMakeLists.txt b/ROMFS/px4fmu_common/init.d-posix/airframes/CMakeLists.txt
+index 4cf43413f6..57f78825bb 100644
+--- a/ROMFS/px4fmu_common/init.d-posix/airframes/CMakeLists.txt
++++ b/ROMFS/px4fmu_common/init.d-posix/airframes/CMakeLists.txt
+@@ -88,6 +88,9 @@ px4_add_romfs_files(
+ 	4019_gz_x500_gimbal
+ 	4020_gz_tiltrotor
+ 	4021_gz_x500_flow
++	4050_gz_quadtailsitter_ijc
++	4051_gz_quadtailsitter_px4
++	4051_gz_quadtailsitter_px4.post
+ 
+ 	6011_gazebo-classic_typhoon_h480
+ 	6011_gazebo-classic_typhoon_h480.post
+diff --git a/ROMFS/px4fmu_common/init.d-posix/rcS b/ROMFS/px4fmu_common/init.d-posix/rcS
+index a2d331ba1e..35b6ac05a5 100644
+--- a/ROMFS/px4fmu_common/init.d-posix/rcS
++++ b/ROMFS/px4fmu_common/init.d-posix/rcS
+@@ -29,6 +29,7 @@ fi
+ set VEHICLE_TYPE                none
+ set LOGGER_ARGS                 ""
+ set LOGGER_BUF                  1000
++set LOGGER_POLL_TOPIC           ""
+ 
+ set RUN_MINIMAL_SHELL           no
+ 
+@@ -363,7 +364,11 @@ fi
+ [ -e "$autostart_file".post ] && . "$autostart_file".post
+ 
+ # Run script to start logging
+-if param compare -s EKF2_EN 1
++if [ -n "$LOGGER_POLL_TOPIC" ]
++then
++	# airframe-selected logging trigger (e.g. a controller debug topic logged at full rate)
++	set LOGGER_ARGS "-p ${LOGGER_POLL_TOPIC}"
++elif param compare -s EKF2_EN 1
+ then
+ 	set LOGGER_ARGS "-p ekf2_timestamps"
+ else
+diff --git a/ROMFS/px4fmu_common/init.d/CMakeLists.txt b/ROMFS/px4fmu_common/init.d/CMakeLists.txt
+index 88c6be83a9..22ce1aaf86 100644
+--- a/ROMFS/px4fmu_common/init.d/CMakeLists.txt
++++ b/ROMFS/px4fmu_common/init.d/CMakeLists.txt
+@@ -69,6 +69,12 @@ if(CONFIG_MODULES_MC_RATE_CONTROL)
+ 	)
+ endif()
+ 
++if(CONFIG_MODULES_IJC_CONTROL)
++	px4_add_romfs_files(
++		rc.mc_ijc_apps
++	)
++endif()
++
+ if(CONFIG_MODULES_ROVER_DIFFERENTIAL)
+ 	px4_add_romfs_files(
+ 		rc.rover_differential_apps
+diff --git a/ROMFS/px4fmu_common/init.d/rc.vehicle_setup b/ROMFS/px4fmu_common/init.d/rc.vehicle_setup
+index 0f10a34ba0..9f48291c54 100644
+--- a/ROMFS/px4fmu_common/init.d/rc.vehicle_setup
++++ b/ROMFS/px4fmu_common/init.d/rc.vehicle_setup
+@@ -26,6 +26,12 @@ fi
+ #
+ # UGV setup.
+ #
++if [ $VEHICLE_TYPE = mc_ijc ]
++then
++	# Start the ijc_control apps (no standard multicopter controllers).
++	. ${R}etc/init.d/rc.mc_ijc_apps
++fi
++
+ if [ $VEHICLE_TYPE = rover ]
+ then
+ 	# Start standard UGV apps.
+diff --git a/boards/px4/sitl/default.px4board b/boards/px4/sitl/default.px4board
+index ebe4f4ca5b..8eee7b9061 100644
+--- a/boards/px4/sitl/default.px4board
++++ b/boards/px4/sitl/default.px4board
+@@ -25,6 +25,7 @@ CONFIG_MODULES_FW_LATERAL_LONGITUDINAL_CONTROL=y
+ CONFIG_FIGURE_OF_EIGHT=y
+ CONFIG_MODULES_FW_RATE_CONTROL=y
+ CONFIG_MODULES_GIMBAL=y
++CONFIG_MODULES_IJC_CONTROL=y
+ CONFIG_MODULES_GYRO_CALIBRATION=y
+ CONFIG_MODULES_GYRO_FFT=y
+ CONFIG_MODULES_LAND_DETECTOR=y
+diff --git a/msg/CMakeLists.txt b/msg/CMakeLists.txt
+index 7eda1cc316..b851b7980d 100644
+--- a/msg/CMakeLists.txt
++++ b/msg/CMakeLists.txt
+@@ -116,6 +116,9 @@ set(msg_files
+ 	HealthReport.msg
+ 	HeaterStatus.msg
+ 	HoverThrustEstimate.msg
++	IjcAero.msg
++	IjcDebug.msg
++	IjcWrench.msg
+ 	InputRc.msg
+ 	InternalCombustionEngineControl.msg
+ 	InternalCombustionEngineStatus.msg
+diff --git a/src/modules/logger/logged_topics.cpp b/src/modules/logger/logged_topics.cpp
+index bdca16eae3..c4af8a04fe 100644
+--- a/src/modules/logger/logged_topics.cpp
++++ b/src/modules/logger/logged_topics.cpp
+@@ -241,6 +241,21 @@ void LoggedTopics::add_default_topics()
+ 	add_topic("vehicle_global_position_groundtruth", 100);
+ 	add_topic("vehicle_local_position_groundtruth", 20);
+ 
++	// ijc_control (observer-based tail-sitter controller): controller signals at full rate
++	add_topic("ijc_debug");
++	add_topic("ijc_wrench");
++	add_optional_topic("ijc_aero");
++	add_topic("trajectory_setpoint");
++	add_topic("vehicle_local_position");
++	add_topic("vehicle_attitude");
++	add_topic("vehicle_angular_velocity");
++	add_topic("vehicle_thrust_setpoint");
++	add_topic("vehicle_torque_setpoint");
++	add_topic("vehicle_angular_velocity_groundtruth");
++	add_topic("vehicle_attitude_groundtruth");
++	add_topic("vehicle_local_position_groundtruth");
++	add_optional_topic_multi("control_allocator_status", 0, 2);
++
+ 	// EKF replay
+ 	{
+ 		// optionally log all estimator* topics at minimal rate
+diff --git a/src/modules/logger/messages.h b/src/modules/logger/messages.h
+index d676f5222c..a6e5091ba7 100644
+--- a/src/modules/logger/messages.h
++++ b/src/modules/logger/messages.h
+@@ -116,7 +116,7 @@ struct ulog_message_format_s {
+ 	uint16_t msg_size; ///< size of message - ULOG_MSG_HEADER_LEN
+ 	uint8_t msg_type = static_cast<uint8_t>(ULogMessageType::FORMAT);
+ 
+-	char format[1600];
++	char format[2400]; // 1600 upstream; larger so that long formats + reader leftover fit (ijc_debug)
+ };
+ 
+ /**
+diff --git a/src/modules/simulation/gz_bridge/GZBridge.cpp b/src/modules/simulation/gz_bridge/GZBridge.cpp
+index 3ef65e186f..ed17680846 100644
+--- a/src/modules/simulation/gz_bridge/GZBridge.cpp
++++ b/src/modules/simulation/gz_bridge/GZBridge.cpp
+@@ -156,6 +156,14 @@ int GZBridge::init()
+ 		return PX4_ERROR;
+ 	}
+ 
++	// external wrench for disturbance injection (only consumed if the world loads IjcWrenchSystem)
++	_ijc_wrench_pub = _node.Advertise<gz::msgs::EntityWrench>("/world/" + _world_name + "/ijc_wrench");
++
++	// aerodynamic wrench measured in Gazebo (only published if the world loads IjcAeroSystem)
++	if (!_node.Subscribe("/world/" + _world_name + "/ijc_aero", &GZBridge::ijcAeroCallback, this)) {
++		PX4_WARN("failed to subscribe to ijc_aero");
++	}
++
+ 	ScheduleNow();
+ 	return OK;
+ }
+@@ -344,6 +352,42 @@ void GZBridge::clockCallback(const gz::msgs::Clock &msg)
+ 		// Keep monotonic clock synchronized
+ 		px4_clock_settime(CLOCK_MONOTONIC, &ts);
+ 	}
++
++	forwardIjcWrench();
++}
++
++void GZBridge::ijcAeroCallback(const gz::msgs::Wrench &msg)
++{
++	// ENU force -> NED, FLU torque -> FRD
++	ijc_aero_s aero{};
++	aero.timestamp_sample = msg.header().stamp().sec() * 1000000ULL + msg.header().stamp().nsec() / 1000ULL;
++	aero.force_ned[0] = msg.force().y();
++	aero.force_ned[1] = msg.force().x();
++	aero.force_ned[2] = -msg.force().z();
++	aero.torque_frd[0] = msg.torque().x();
++	aero.torque_frd[1] = -msg.torque().y();
++	aero.torque_frd[2] = -msg.torque().z();
++	aero.timestamp = hrt_absolute_time();
++	_ijc_aero_pub.publish(aero);
++}
++
++void GZBridge::forwardIjcWrench()
++{
++	ijc_wrench_s wrench;
++
++	if (!_ijc_wrench_pub.Valid() || !_ijc_wrench_sub.update(&wrench)) {
++		return;
++	}
++
++	// NED force -> ENU (world), FRD torque -> FLU (body)
++	gz::msgs::EntityWrench msg;
++	msg.mutable_entity()->set_name(_model_name);
++	msg.mutable_entity()->set_type(gz::msgs::Entity::MODEL);
++	gz::msgs::Set(msg.mutable_wrench()->mutable_force(),
++		      gz::math::Vector3d(wrench.force_ned[1], wrench.force_ned[0], -wrench.force_ned[2]));
++	gz::msgs::Set(msg.mutable_wrench()->mutable_torque(),
++		      gz::math::Vector3d(wrench.torque_frd[0], -wrench.torque_frd[1], -wrench.torque_frd[2]));
++	_ijc_wrench_pub.Publish(msg);
+ }
+ 
+ void GZBridge::opticalFlowCallback(const px4::msgs::OpticalFlow &msg)
+diff --git a/src/modules/simulation/gz_bridge/GZBridge.hpp b/src/modules/simulation/gz_bridge/GZBridge.hpp
+index 9f90f4dfea..f46f004688 100644
+--- a/src/modules/simulation/gz_bridge/GZBridge.hpp
++++ b/src/modules/simulation/gz_bridge/GZBridge.hpp
+@@ -53,6 +53,8 @@
+ #include <uORB/topics/parameter_update.h>
+ #include <uORB/topics/differential_pressure.h>
+ #include <uORB/topics/distance_sensor.h>
++#include <uORB/topics/ijc_wrench.h>
++#include <uORB/topics/ijc_aero.h>
+ #include <uORB/topics/sensor_accel.h>
+ #include <uORB/topics/sensor_gyro.h>
+ #include <uORB/topics/sensor_gps.h>
+@@ -179,6 +181,15 @@ private:
+ 	bool _realtime_clock_set{false};
+ 	gz::transport::Node _node;
+ 
++	// external wrench requested by ijc_control (disturbance injection), forwarded to the IjcWrenchSystem plugin
++	void forwardIjcWrench();
++	uORB::Subscription _ijc_wrench_sub{ORB_ID(ijc_wrench)};
++	gz::transport::Node::Publisher _ijc_wrench_pub;
++
++	// aerodynamic wrench measured by the IjcAeroSystem plugin (ground truth for the observers)
++	void ijcAeroCallback(const gz::msgs::Wrench &msg);
++	uORB::Publication<ijc_aero_s> _ijc_aero_pub{ORB_ID(ijc_aero)};
++
+ 	// GPS noise model
+ 	float _gps_pos_noise_n = 0.0f;
+ 	float _gps_pos_noise_e = 0.0f;
+diff --git a/src/modules/simulation/gz_plugins/CMakeLists.txt b/src/modules/simulation/gz_plugins/CMakeLists.txt
+index 7fc65c8b5b..b00e3ddc9a 100644
+--- a/src/modules/simulation/gz_plugins/CMakeLists.txt
++++ b/src/modules/simulation/gz_plugins/CMakeLists.txt
+@@ -70,11 +70,14 @@ if (gz-transport_FOUND)
+     add_subdirectory(generic_motor)
+     add_subdirectory(buoyancy)
+     add_subdirectory(spacecraft_thruster)
++    add_subdirectory(ijc_wrench)
++    add_subdirectory(ijc_video)
++    add_subdirectory(ijc_gust)
+ 
+     # Add an alias target for each plugin
+     if (TARGET GstCameraSystem)
+-        add_custom_target(px4_gz_plugins ALL DEPENDS OpticalFlowSystem MovingPlatformController TemplatePlugin GenericMotorModelPlugin BuoyancySystemPlugin GstCameraSystem SpacecraftThrusterModelPlugin)
++        add_custom_target(px4_gz_plugins ALL DEPENDS OpticalFlowSystem MovingPlatformController TemplatePlugin GenericMotorModelPlugin BuoyancySystemPlugin GstCameraSystem SpacecraftThrusterModelPlugin IjcWrenchSystem IjcAeroSystem IjcVideoSystem IjcGustSystem)
+     else()
+-        add_custom_target(px4_gz_plugins ALL DEPENDS OpticalFlowSystem MovingPlatformController TemplatePlugin GenericMotorModelPlugin BuoyancySystemPlugin SpacecraftThrusterModelPlugin)
++        add_custom_target(px4_gz_plugins ALL DEPENDS OpticalFlowSystem MovingPlatformController TemplatePlugin GenericMotorModelPlugin BuoyancySystemPlugin SpacecraftThrusterModelPlugin IjcWrenchSystem IjcAeroSystem IjcVideoSystem IjcGustSystem)
+     endif()
+ endif()

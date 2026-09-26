@@ -1,0 +1,7 @@
+# Base of the PX4 changes (sourced by setup.sh and export_px4_changes.sh)
+PX4_REPO=https://github.com/PX4/PX4-Autopilot.git
+PX4_TAG=v1.17.0
+PX4_COMMIT=d6f12ad1c4f70ad3230afd7d86e971421e02fef4
+# Gazebo models/worlds submodule (PX4/PX4-gazebo-models) at the commit pinned by PX4 v1.17.0
+GZ_MODELS_PATH=Tools/simulation/gz
+GZ_MODELS_COMMIT=b6127f4ec20de867e215fb5f78ae88b80f371909

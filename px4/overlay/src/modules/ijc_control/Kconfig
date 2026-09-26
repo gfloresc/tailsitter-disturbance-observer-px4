@@ -1,0 +1,5 @@
+menuconfig MODULES_IJC_CONTROL
+	bool "ijc_control"
+	default n
+	---help---
+		Enable support for ijc_control (observer-based tail-sitter controller)

@@ -1,0 +1,42 @@
+#!/bin/sh
+#
+# @name Quad tail-sitter (hover), standard PX4 multicopter controllers
+#
+# @type Quadrotor x
+#
+# @maintainer ijc_control authors
+#
+# Comparison case for the ijc_control experiments: same vehicle, actuator
+# mapping, estimator and reference as 4050_gz_quadtailsitter_ijc, but the loop
+# is closed by the standard PX4 controllers (mc_pos_control, mc_att_control,
+# mc_rate_control) with their default parameters. ijc_control runs with
+# IJC_MODE = 1: it only publishes the reference (Offboard position with
+# velocity/acceleration feedforward), injects the disturbances and logs the
+# observers. Launch with the quadtailsitter_ijc model:
+#   PX4_SYS_AUTOSTART=4051 make px4_sitl gz_quadtailsitter_ijc
+#
+
+. ${R}etc/init.d-posix/airframes/4050_gz_quadtailsitter_ijc
+
+# standard multicopter apps (rc.mc_apps)
+set VEHICLE_TYPE mc
+
+param set-default IJC_MODE 1
+
+# Multicopter tuning that PX4 ships for the quadtailsitter (rc.vtol_defaults + 4018_gz_quadtailsitter),
+# hover-relevant parameters only (no VTOL stack here)
+param set-default MC_AIRMODE 2
+# yaw airmode requires stick-gesture arming off (as in 4018), otherwise commander resets MC_AIRMODE to 1
+param set-default MAN_ARM_GESTURE 0
+param set-default MC_ROLL_P 3
+param set-default MC_PITCH_P 3
+param set-default MC_ROLLRATE_P 0.3
+param set-default MC_PITCHRATE_P 0.3
+param set-default MC_ROLLRATE_MAX 120
+param set-default MC_YAW_P 2
+param set-default MC_YAWRATE_MAX 120
+param set-default MPC_ACC_HOR_MAX 2
+param set-default MPC_XY_ERR_MAX 5
+param set-default MPC_XY_VEL_MAX 8
+param set-default MPC_JERK_MAX 4.5
+param set-default HTE_VXY_THR 2

@@ -1,0 +1,9 @@
+# Python packages (pip3 install --user -r requirements.txt). The Gazebo Python bindings
+# (python3-gz-transport13, python3-gz-msgs10) come with Gazebo Harmonic (apt).
+numpy>=1.24
+matplotlib>=3.7
+pyulog>=1.0
+pymavlink>=2.4
+Pillow>=9.0
+imageio-ffmpeg>=0.4    # videos only: bundled ffmpeg with libx264 and libass
+numba>=0.57            # reference simulation only (spec/sim_python)

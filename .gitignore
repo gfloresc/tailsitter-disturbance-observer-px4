@@ -1,0 +1,14 @@
+# PX4 tree created by setup.sh
+PX4-Autopilot/
+# simulation logs and generated data (distributed as Release assets)
+logs/
+*.ulg
+*.zip
+*.tar.zst
+*.mp4
+*.npy
+results/plotdata/*.csv
+results/videos/*.png
+# Python
+__pycache__/
+*.pyc

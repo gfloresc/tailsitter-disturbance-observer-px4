@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<sdf version="1.9">
+  <model name="ijc_ground">
+    <static>true</static>
+    <link name="link">
+      <visual name="visual">
+        <cast_shadows>false</cast_shadows>
+        <geometry><plane><normal>0 0 1</normal><size>32 32</size></plane></geometry>
+        <material>
+          <diffuse>1 1 1 1</diffuse>
+          <specular>0.05 0.05 0.05 1</specular>
+          <pbr><metal><albedo_map>materials/textures/ground.png</albedo_map><roughness>0.95</roughness><metalness>0</metalness></metal></pbr>
+        </material>
+      </visual>
+    </link>
+  </model>
+</sdf>
