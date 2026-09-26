@@ -27,7 +27,7 @@ PX4 **v1.17.0** plus our new files, and `setup.sh` rebuilds the exact PX4 tree u
 | `results/` | figures, metrics (`metrics.csv`, `metrics_runs.csv`, LaTeX table), parameters used, gain-search results |
 | `docs/NOTES.md` | technical notes: implementation, normalization, gain selection, methodology, detailed results, deviations from the spec |
 
-Large data (ULogs, time series, videos) are distributed as Release assets (see [Data](#data-release-assets)).
+Large data (ULogs, time series, videos) are distributed as Release assets (see [Data and videos](#data-and-videos-release-v10)).
 
 ## Requirements
 
@@ -155,22 +155,85 @@ video with ffmpeg: title screen, three synchronized columns and a live plot of t
 (`compose_aggressive.py`). Output: `results/videos/{hover,circle}_aggressive_comparison.mp4`. The
 choice of the disturbance (search at 4x with a saturation limit of 5 % for every case,
 `calib_gust.sh`) and all the numbers are documented in `results/videos/README.md`. The official final
-versions of the videos are in the Release.
+versions of the videos are in the Release (`videos.zip`).
 
-## Data (Release assets)
+## Data and videos (Release v1.0)
 
-Not stored in the repository; published as assets of the GitHub Release:
+The simulation logs, the full-rate time series and the videos are not stored in the repository; they
+are the assets of the GitHub Release
+[v1.0](https://github.com/gfloresc/tailsitter-disturbance-observer-px4/releases/tag/v1.0)
+(the repository is private: you need access to it, and `gh` must be logged in with an account that
+has it).
 
-| Asset | Content |
-|---|---|
-| `results_data.zip` | `results/` with the 1 kHz time series of all figures (`results/plotdata/*.csv`) |
-| `plotdata_100Hz.zip` | the same time series at 100 Hz, `metrics.csv`, `metrics_runs.csv`, `params.txt` |
-| `videos.zip` | official videos `hover_final.mp4`, `circle_final.mp4`; generated versions |
-| `ulogs_S1.tar.zst` | ULogs of S1 and S1h (4 cases each) |
-| `ulogs_S2.tar.zst`, `ulogs_S3.tar.zst` | ULogs of S2 and S3 (4 cases x 5 repetitions) |
+| File | Size | Content |
+|---|---|---|
+| `results_data.zip` | 58 MB | `results/` as in the repository (figures, `metrics.csv`, `metrics_runs.csv`, `metrics_table.tex`, `params.txt`, gain-search CSVs) plus the 1 kHz time series of every figure, `results/plotdata/<S>_<case>.csv` (S1, S2, S3 x 4 cases; columns in `results/plotdata/README.md`) |
+| `plotdata_100Hz.zip` | 7.5 MB | the same time series subsampled to 100 Hz (all columns), with `metrics.csv`, `metrics_runs.csv` and `params.txt`: the light version for plotting |
+| `videos.zip` | 88 MB | `videos/hover_final.mp4`, `videos/circle_final.mp4`: official comparison videos (hover and circle under wind gust fronts; with disturbance compensation / without compensation / PX4 tuned); `videos/generated/`: the versions produced by `scripts/make_videos.sh` and the first S1/S2 videos; `videos/README.txt` |
+| `ulogs_S1.tar.zst` | 109 MB | PX4 ULogs of S1 and S1h, 4 cases each (`logs/S1_*.ulg`, `logs/S1h_*.ulg`) with their run metadata (`.json`: parameters, durations) |
+| `ulogs_S2.tar.zst` | 587 MB | ULogs of S2, 4 cases x 5 repetitions (`logs/S2/S2_<case>_r<i>.ulg` + `.json`) |
+| `ulogs_S3.tar.zst` | 618 MB | ULogs of S3, 4 cases x 5 repetitions (`logs/S3/S3_<case>_r<i>.ulg` + `.json`) |
+| `SHA256SUMS` | | SHA-256 checksums of the six files above |
+| `RELEASE_NOTES.md` | | summary of the assets |
 
-Extract the ULog archives at the repository root (`tar --zstd -xf ulogs_S2.tar.zst`); they unpack into
-`logs/`, where the post-processing commands above expect them.
+Cases: `comp` (ijc_control with compensation), `nocomp` (without), `px4` (standard PX4 controllers,
+tuned gains), `px4ship` (standard PX4 controllers, gains shipped by PX4).
+
+### Download
+
+From the repository root, into `release/` (ignored by git):
+
+```bash
+gh release download v1.0 -R gfloresc/tailsitter-disturbance-observer-px4 -D release
+# or only some files:
+gh release download v1.0 -R gfloresc/tailsitter-disturbance-observer-px4 -D release -p 'ulogs_S1.tar.zst' -p SHA256SUMS
+```
+
+The files can also be downloaded from the Release page in the browser (logged in to GitHub).
+
+### Verify the checksums
+
+```bash
+cd release && sha256sum -c --ignore-missing SHA256SUMS && cd ..
+```
+
+Every downloaded file must report `OK` (`--ignore-missing` skips the files you did not download).
+
+### Where to put them
+
+Run the commands from the repository root:
+
+```bash
+tar --zstd -xf release/ulogs_S1.tar.zst   # -> logs/S1_*.ulg, logs/S1h_*.ulg
+tar --zstd -xf release/ulogs_S2.tar.zst   # -> logs/S2/
+tar --zstd -xf release/ulogs_S3.tar.zst   # -> logs/S3/
+unzip -o release/results_data.zip         # -> results/ (adds results/plotdata/*.csv; the other files are those of the repository)
+unzip release/videos.zip -d release/      # -> release/videos/*.mp4
+unzip release/plotdata_100Hz.zip -d release/   # -> release/plotdata_100Hz/
+```
+
+(`tar --zstd` needs the `zstd` package: `sudo apt install zstd`.) `logs/` and the extracted data are
+ignored by git.
+
+### Regenerate figures, metrics and tables from the ULogs (no simulation needed)
+
+```bash
+cd scripts
+python3 postprocess.py S1  ../logs/S1_comp.ulg  ../logs/S1_nocomp.ulg  --px4 ../logs/S1_px4.ulg  --px4-shipped ../logs/S1_px4ship.ulg
+python3 postprocess.py S1h ../logs/S1h_comp.ulg ../logs/S1h_nocomp.ulg --px4 ../logs/S1h_px4.ulg --px4-shipped ../logs/S1h_px4ship.ulg
+python3 postprocess.py S2 --reps ../logs/S2 --tend 60   # mean +- std over the 5 repetitions, figures of repetition 1
+python3 postprocess.py S3 --reps ../logs/S3 --tend 60
+python3 write_params.py ../logs/S1_{comp,nocomp,px4,px4ship}.ulg ../logs/S1h_{comp,nocomp,px4,px4ship}.ulg \
+    ../logs/S2/S2_{comp,nocomp,px4,px4ship}_r1.ulg ../logs/S3/S3_{comp,nocomp,px4,px4ship}_r1.ulg
+python3 export_plotdata.py                              # results/plotdata/*.csv (1 kHz)
+```
+
+They rewrite `results/figures/`, `results/metrics.csv`, `results/metrics_runs.csv`,
+`results/metrics_table.tex`, `results/params.txt` and `results/plotdata/` from the ULogs. Checked on a
+fresh clone with the v1.0 assets: `metrics.csv`, `metrics_runs.csv`, `metrics_table.tex`, the PNG
+figures and the 1 kHz time series are reproduced exactly; the PDF figures differ only in their
+creation date, and `params.txt` only in the line with the version of the local PX4 tree (`n/a`
+without `PX4-Autopilot`).
 
 ## Maintaining the PX4 changes
 

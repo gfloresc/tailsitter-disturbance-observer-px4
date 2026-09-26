@@ -1,5 +1,7 @@
 # PX4 tree created by setup.sh
 PX4-Autopilot/
+# Release assets downloaded with gh release download -D release
+release/
 # simulation logs and generated data (distributed as Release assets)
 logs/
 *.ulg
