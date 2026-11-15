@@ -2,12 +2,16 @@
 
 PX4 + Gazebo software-in-the-loop implementation of the control scheme of the paper
 *"Observer-Based Disturbance-Compensated Position and Attitude Control of Tail-Sitter UAVs"*
-(under review; the manuscript is not included). Only the paper's control laws are in the loop:
-translational and rotational disturbance observers without leakage, the position law with the force
+(A. Flores and G. Flores, International Journal of Control, 2026; the manuscript is not included).
+Only the paper's control laws are in the loop: translational and rotational disturbance observers
+without leakage, the position law with the force
 estimate `F_hat`, the desired attitude `Q_d` with constant yaw, and the attitude law with the torque
 estimate `T_hat`. PX4 provides the infrastructure (uORB, EKF2, control allocator, logger, Gazebo
 bridge); no standard PX4 control law runs when the module `ijc_control` flies. The standard PX4
 controllers, with their shipped and with a tuned set of gains, are included as comparison cases.
+
+**Video:** https://youtu.be/IsXVBqzxwI0 (hover and circular tracking under gusty wind: with
+disturbance compensation, without compensation and PX4 tuned).
 
 The repository contains only our code: the PX4 changes are stored as patches against the official
 PX4 **v1.17.0** plus our new files, and `setup.sh` rebuilds the exact PX4 tree used for the results.
@@ -27,7 +31,7 @@ PX4 **v1.17.0** plus our new files, and `setup.sh` rebuilds the exact PX4 tree u
 | `results/` | figures, metrics (`metrics.csv`, `metrics_runs.csv`, LaTeX table), parameters used, gain-search results |
 | `docs/NOTES.md` | technical notes: implementation, normalization, gain selection, methodology, detailed results, deviations from the spec |
 
-Large data (ULogs, time series, videos) are distributed as Release assets (see [Data and videos](#data-and-videos-release-v10)).
+Large data (ULogs, time series) are distributed as Release assets (see [Data](#data-release-v10)).
 
 ## Requirements
 
@@ -154,26 +158,23 @@ the three cases of each scenario with an offscreen camera in Gazebo (real time),
 video with ffmpeg: title screen, three synchronized columns and a live plot of the position error
 (`compose_aggressive.py`). Output: `results/videos/{hover,circle}_aggressive_comparison.mp4`. The
 choice of the disturbance (search at 4x with a saturation limit of 5 % for every case,
-`calib_gust.sh`) and all the numbers are documented in `results/videos/README.md`. The official final
-versions of the videos are in the Release (`videos.zip`).
+`calib_gust.sh`) and all the numbers are documented in `results/videos/README.md`. The narrated
+video of these two scenarios is on YouTube: https://youtu.be/IsXVBqzxwI0.
 
-## Data and videos (Release v1.0)
+## Data (Release v1.0)
 
-The simulation logs, the full-rate time series and the videos are not stored in the repository; they
-are the assets of the GitHub Release
-[v1.0](https://github.com/gfloresc/tailsitter-disturbance-observer-px4/releases/tag/v1.0)
-(the repository is private: you need access to it, and `gh` must be logged in with an account that
-has it).
+The simulation logs and the full-rate time series are not stored in the repository; they are the
+assets of the GitHub Release
+[v1.0](https://github.com/gfloresc/tailsitter-disturbance-observer-px4/releases/tag/v1.0).
 
 | File | Size | Content |
 |---|---|---|
 | `results_data.zip` | 58 MB | `results/` as in the repository (figures, `metrics.csv`, `metrics_runs.csv`, `metrics_table.tex`, `params.txt`, gain-search CSVs) plus the 1 kHz time series of every figure, `results/plotdata/<S>_<case>.csv` (S1, S2, S3 x 4 cases; columns in `results/plotdata/README.md`) |
 | `plotdata_100Hz.zip` | 7.5 MB | the same time series subsampled to 100 Hz (all columns), with `metrics.csv`, `metrics_runs.csv` and `params.txt`: the light version for plotting |
-| `videos.zip` | 88 MB | `videos/hover_final.mp4`, `videos/circle_final.mp4`: official comparison videos (hover and circle under wind gust fronts; with disturbance compensation / without compensation / PX4 tuned); `videos/generated/`: the versions produced by `scripts/make_videos.sh` and the first S1/S2 videos; `videos/README.txt` |
 | `ulogs_S1.tar.zst` | 109 MB | PX4 ULogs of S1 and S1h, 4 cases each (`logs/S1_*.ulg`, `logs/S1h_*.ulg`) with their run metadata (`.json`: parameters, durations) |
 | `ulogs_S2.tar.zst` | 587 MB | ULogs of S2, 4 cases x 5 repetitions (`logs/S2/S2_<case>_r<i>.ulg` + `.json`) |
 | `ulogs_S3.tar.zst` | 618 MB | ULogs of S3, 4 cases x 5 repetitions (`logs/S3/S3_<case>_r<i>.ulg` + `.json`) |
-| `SHA256SUMS` | | SHA-256 checksums of the six files above |
+| `SHA256SUMS` | | SHA-256 checksums of the five files above |
 | `RELEASE_NOTES.md` | | summary of the assets |
 
 Cases: `comp` (ijc_control with compensation), `nocomp` (without), `px4` (standard PX4 controllers,
@@ -189,7 +190,7 @@ gh release download v1.0 -R gfloresc/tailsitter-disturbance-observer-px4 -D rele
 gh release download v1.0 -R gfloresc/tailsitter-disturbance-observer-px4 -D release -p 'ulogs_S1.tar.zst' -p SHA256SUMS
 ```
 
-The files can also be downloaded from the Release page in the browser (logged in to GitHub).
+The files can also be downloaded from the Release page in the browser.
 
 ### Verify the checksums
 
@@ -208,7 +209,6 @@ tar --zstd -xf release/ulogs_S1.tar.zst   # -> logs/S1_*.ulg, logs/S1h_*.ulg
 tar --zstd -xf release/ulogs_S2.tar.zst   # -> logs/S2/
 tar --zstd -xf release/ulogs_S3.tar.zst   # -> logs/S3/
 unzip -o release/results_data.zip         # -> results/ (adds results/plotdata/*.csv; the other files are those of the repository)
-unzip release/videos.zip -d release/      # -> release/videos/*.mp4
 unzip release/plotdata_100Hz.zip -d release/   # -> release/plotdata_100Hz/
 ```
 

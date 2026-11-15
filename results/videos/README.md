@@ -1,8 +1,7 @@
 # Comparison videos
 
-The official final versions of the two gust-front videos, `hover_final.mp4` and `circle_final.mp4`
-(with the corrected title screen), and the generated versions described below are distributed in the
-Release asset `videos.zip`.
+The narrated video of the two gust-front scenarios (hover and circle) is on YouTube: https://youtu.be/IsXVBqzxwI0.
+The videos described below are not versioned; `scripts/make_videos.sh` regenerates them.
 
 ## Gust-front videos (current)
 
